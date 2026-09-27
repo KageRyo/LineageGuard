@@ -1,0 +1,41 @@
+version: 1
+sources:
+  official-report:
+    status: available
+    locator: https://example.gov/synthetic/report
+    version: synthetic-2026
+    revision: report-copy-1
+    retrieved_at: "2026-09-01T10:00:00Z"
+    rights: synthetic-public-domain
+    snapshot:
+      path: sources/official-report.txt
+      sha256: bf74b5ea8ec8149c8caa35cdf1905a5cb1b0f8adf563b1d0e02db49512e42dd8
+      size_bytes: 44
+  rainfall-series:
+    status: unknown
+    locator: https://example.gov/synthetic/rainfall
+  archive-copy:
+    status: unavailable
+    locator: https://example.gov/synthetic/archive
+artifacts:
+  normalized-events-v1:
+    path: data/normalized-events.csv
+    sha256: a8002ef779a0a123aed7667d7b18f7d02db1bb746c109964782a9c5c4a66ee28
+    version: v1
+  derived-summary-v1:
+    path: data/summary.json
+    sha256: f9988c624855a28118e2053238ce95ca7d28a27133d9f985c3d06094f20c41d5
+    version: v1
+lineage:
+  - from: official-report
+    to: normalized-events-v1
+    type: derived_from
+  - from: normalized-events-v1
+    to: derived-summary-v1
+    type: derived_from
+  - from: rainfall-series
+    to: derived-summary-v1
+    type: derived_from
+  - from: archive-copy
+    to: derived-summary-v1
+    type: derived_from

@@ -1,0 +1,12 @@
+version: 1
+artifacts:
+  sample-output:
+    path: data/output.txt
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
+lineage:
+  - from: sample-source
+    to: sample-output
+    type: derived_from
+sources:
+  sample-source:
+    status: available
