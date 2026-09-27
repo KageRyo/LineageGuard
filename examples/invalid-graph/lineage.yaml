@@ -1,0 +1,15 @@
+version: 1
+artifacts:
+  first:
+    path: data/first.txt
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  second:
+    path: data/second.txt
+    sha256: 0000000000000000000000000000000000000000000000000000000000000000
+lineage:
+  - from: first
+    to: second
+    type: derived_from
+  - from: second
+    to: first
+    type: derived_from
