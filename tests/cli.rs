@@ -248,6 +248,33 @@ fn validate_rejects_windows_drive_paths_on_every_platform() {
     assert_eq!(output_json(&output)["error"]["code"], "unsafe_path");
 }
 
+#[test]
+fn validate_rejects_windows_nonportable_components_on_every_platform() {
+    let directory = project();
+    for path in [
+        "data/events.csv:metadata",
+        "data/NUL",
+        "data/NUL.txt",
+        "data/COM1.log",
+        "data/LPT³.csv",
+        "data/trailing.",
+        "data/trailing ",
+        "data/invalid?.csv",
+    ] {
+        let manifest = format!(
+            "version: 1\nartifacts:\n  events-v1:\n    path: \"{path}\"\n    sha256: 8336d8801f75d65bbb33de833eeca48f8079e90ed50accde75b6641ad81e3486\n"
+        );
+        write_manifest(directory.path(), &manifest);
+        let output = invoke(&["validate", "--format", "json"], directory.path());
+        assert_eq!(
+            output.status.code(),
+            Some(2),
+            "path should be rejected on every platform: {path:?}"
+        );
+        assert_eq!(output_json(&output)["error"]["code"], "unsafe_path");
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn validate_rejects_a_symlink_that_escapes_the_project_root() {

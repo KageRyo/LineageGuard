@@ -80,18 +80,23 @@ pub fn inspect_local_path(root: &Path, declared: &str) -> Result<PathInspection,
 }
 
 pub fn validate_relative_path(declared: &str) -> Result<(), AppError> {
-    let bytes = declared.as_bytes();
-    let windows_drive = bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
     if declared.is_empty()
         || declared.starts_with('/')
         || declared.starts_with('\\')
         || declared.contains('\\')
-        || declared.contains('\0')
         || Path::new(declared).is_absolute()
-        || windows_drive
-        || declared
-            .split('/')
-            .any(|part| part.is_empty() || part == "." || part == "..")
+        || declared.split('/').any(|part| {
+            part.is_empty()
+                || part == "."
+                || part == ".."
+                || part.ends_with(' ')
+                || part.ends_with('.')
+                || part.chars().any(|character| {
+                    character.is_ascii_control()
+                        || matches!(character, '<' | '>' | ':' | '"' | '|' | '?' | '*')
+                })
+                || is_windows_reserved_device_name(part)
+        })
     {
         return Err(AppError::new(
             ErrorKind::UnsafePath,
@@ -99,4 +104,22 @@ pub fn validate_relative_path(declared: &str) -> Result<(), AppError> {
         ));
     }
     Ok(())
+}
+
+fn is_windows_reserved_device_name(component: &str) -> bool {
+    let basename = component
+        .split('.')
+        .next()
+        .unwrap_or(component)
+        .trim_end_matches([' ', '.']);
+    let basename = basename.to_ascii_uppercase();
+    matches!(basename.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ["COM", "LPT"].iter().any(|prefix| {
+            basename.strip_prefix(prefix).is_some_and(|suffix| {
+                matches!(
+                    suffix,
+                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                )
+            })
+        })
 }
