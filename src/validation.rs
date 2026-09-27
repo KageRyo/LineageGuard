@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::{AppError, ErrorKind};
 use crate::manifest::Project;
-use crate::model::{Finding, Manifest};
+use crate::model::{Availability, Finding, Manifest};
 use crate::paths::inspect_local_path;
 
 const SHA256_LENGTH: usize = 64;
@@ -89,6 +89,17 @@ fn validate_manifest(
         if !all_ids.contains(edge.from.as_str()) {
             return Err(invalid(format!(
                 "lineage from ID {:?} is not declared",
+                edge.from
+            )));
+        }
+        if manifest
+            .sources
+            .0
+            .get(&edge.from)
+            .is_some_and(|source| source.status == Availability::NotApplicable)
+        {
+            return Err(invalid(format!(
+                "lineage input {:?} has status not_applicable",
                 edge.from
             )));
         }

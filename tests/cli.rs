@@ -165,6 +165,23 @@ fn verify_keeps_not_applicable_explicit_without_failing_integrity() {
 }
 
 #[test]
+fn validate_rejects_a_not_applicable_source_used_by_lineage() {
+    let directory = project();
+    write_manifest(
+        directory.path(),
+        "version: 1\nsources:\n  out-of-scope: {status: not_applicable}\nartifacts:\n  events-v1: {path: data/events.csv, sha256: 8336d8801f75d65bbb33de833eeca48f8079e90ed50accde75b6641ad81e3486}\nlineage:\n  - {from: out-of-scope, to: events-v1, type: derived_from}\n",
+    );
+    let output = invoke(&["validate", "--format", "json"], directory.path());
+    assert_eq!(output.status.code(), Some(2));
+    let error = output_json(&output)["error"].clone();
+    assert_eq!(error["code"], "invalid_manifest");
+    assert!(error["message"]
+        .as_str()
+        .expect("error message")
+        .contains("not_applicable"));
+}
+
+#[test]
 fn validate_rejects_a_missing_lineage_reference_as_configuration_error() {
     let directory = project();
     write_manifest(

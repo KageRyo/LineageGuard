@@ -32,7 +32,7 @@ The basic example contains synthetic source and artifact files. Its report sourc
 
 ## Manifest version 1
 
-The manifest has one integer version, globally unique source and artifact IDs, and directed lineage edges. An edge points from an input to the artifact derived from it. Version 1 supports `derived_from`; its target must be an artifact, while its input may be a source or another artifact.
+The manifest has one integer version, globally unique source and artifact IDs, and directed lineage edges. An edge points from an input to the artifact derived from it. Version 1 supports `derived_from`; its target must be an artifact, while its input may be a source or another artifact. A source marked `not_applicable` cannot be used as a lineage input.
 
 ```yaml
 version: 1
