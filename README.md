@@ -1,5 +1,7 @@
 # LineageGuard
 
+[![CI](https://github.com/KageRyo/LineageGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/KageRyo/LineageGuard/actions/workflows/ci.yml) [![License](https://img.shields.io/github/license/KageRyo/LineageGuard.svg)](LICENSE)
+
 LineageGuard is a local command line tool for checking artifact identity, source provenance, and declared upstream lineage. It answers which inputs an artifact names, whether local copies still match their declared SHA-256 digests, and which provenance gaps remain explicit.
 
 LineageGuard reads a `lineage.yaml` manifest and local files only. It does not fetch URLs, validate dataset schemas or rows, transform data, manage workflows, or host a catalog. ReleaseGuard checks dataset structure such as field types, uniqueness, references, timestamp order, and release-file integrity; LineageGuard follows source and artifact identities across declared derivation edges.
@@ -66,6 +68,8 @@ lineage:
 
 Artifact IDs and source IDs share one namespace. Repeated YAML keys, duplicate edges, conflicting digest or size declarations for one path, unknown IDs, unsupported relationship types, malformed digests, and unsupported manifest versions are rejected. A declared local artifact path requires a SHA-256 digest. A source snapshot always requires both a path and a digest; source snapshots are optional because a remote source may be known without a retained local copy.
 
+Artifacts without a local path may remain in lineage metadata, but `verify` reports `artifact_not_materialized` for them.
+
 Source status describes declared availability, independently of local verification:
 
 | Source status | Meaning | `verify` when no snapshot is declared | `audit` |
@@ -94,7 +98,7 @@ lineageguard audit [PATH]
 
 Exit codes are `0` for a successful command, `1` for an integrity failure, dependency cycle, or audit finding, and `2` for invalid configuration, malformed input, unsafe paths, or execution errors. Explicit unknown and unavailable source states alone do not make `verify` fail; they do make `audit` report an incomplete chain.
 
-All data paths in the manifest must be relative, use `/`, and stay inside the project root after symlink resolution. Absolute paths, Windows drive paths, `.` or `..` components, and backslashes are rejected. An in-root symlink is accepted but reported by `audit` as `mutable_path`; a symlink that resolves outside the root is rejected. A path component named `current` is accepted and reported as mutable by `audit`.
+All data paths in the manifest must be relative, use `/`, and stay inside the project root after symlink resolution. Absolute paths, Windows drive paths, `.` or `..` components, backslashes, Windows-reserved characters or device names, and components ending in a dot or space are rejected. An in-root symlink is accepted but reported by `audit` as `mutable_path`; a symlink that resolves outside the root is rejected. A path component named `current` is accepted and reported as mutable by `audit`.
 
 Successful JSON reports use sorted checks and findings, stable object fields, and no generated timestamp. Error reports use stable reason codes such as `invalid_manifest`, `unsafe_path`, and `unknown_artifact`.
 
