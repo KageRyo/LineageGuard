@@ -25,6 +25,9 @@ jobs:
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: cargo test --locked
       - run: cargo build --release --locked
+      - name: Check Linux GLIBC compatibility
+        if: matrix.os == 'ubuntu-24.04'
+        run: bash scripts/check-linux-glibc-compatibility.sh target/release/lineageguard
 
   action-wrapper:
     runs-on: ubuntu-24.04
