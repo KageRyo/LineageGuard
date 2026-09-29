@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use lineageguard::diff::{diff_paths, render_text as render_diff};
 use lineageguard::manifest::load_project;
 use lineageguard::model::{
     AuditReport, Finding, LineageNode, LineageReport, Manifest, ValidationReport,
@@ -63,6 +64,8 @@ enum Commands {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Compare the sources, artifacts, and edges in two manifests.
+    Diff { old: PathBuf, new: PathBuf },
     /// Render all declared source, artifact, and lineage nodes as a graph.
     Graph {
         #[arg(default_value = ".")]
@@ -139,6 +142,13 @@ fn main() {
                 } else {
                     1
                 }
+            }),
+        ),
+        Commands::Diff { old, new } => (
+            "diff",
+            diff_paths(&old, &new).map(|report| {
+                emit(&report, format, || render_diff(&report));
+                0
             }),
         ),
         Commands::Graph { .. } => unreachable!("graph commands are handled above"),

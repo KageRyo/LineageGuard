@@ -1,0 +1,30 @@
+version: 1
+sources:
+  climate-observations:
+    status: available
+    locator: https://data.example.org/climate/observations
+    version: "2026-01"
+    revision: archive-2026-01
+  station-catalog:
+    status: unknown
+    locator: https://data.example.org/stations/catalog
+artifacts:
+  normalized-observations:
+    path: data/normalized-v2.csv
+    sha256: 2222222222222222222222222222222222222222222222222222222222222222
+    size_bytes: 192
+    version: v2
+  daily-summary:
+    path: data/daily-summary.csv
+    sha256: 3333333333333333333333333333333333333333333333333333333333333333
+    version: v2
+lineage:
+  - from: climate-observations
+    to: normalized-observations
+    type: derived_from
+  - from: station-catalog
+    to: normalized-observations
+    type: derived_from
+  - from: normalized-observations
+    to: daily-summary
+    type: derived_from

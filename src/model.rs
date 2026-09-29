@@ -67,13 +67,18 @@ pub struct Manifest {
     pub lineage: Vec<LineageEdge>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Artifact {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
 }
 
@@ -97,23 +102,30 @@ impl Availability {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Source {
     pub status: Availability,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub locator: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub revision: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub retrieved_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rights: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub snapshot: Option<Snapshot>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Snapshot {
     pub path: String,
     pub sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub size_bytes: Option<u64>,
 }
 

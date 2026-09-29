@@ -12,23 +12,23 @@ Each GitHub release provides standalone archives for Linux x64, Windows x64, and
 
 | Platform | Archive |
 | --- | --- |
-| Linux x64 | `lineageguard-v0.2.1-linux-x86_64.tar.gz` |
-| Windows x64 | `lineageguard-v0.2.1-windows-x86_64.zip` |
-| macOS ARM64 | `lineageguard-v0.2.1-macos-aarch64.tar.gz` |
+| Linux x64 | `lineageguard-v0.3.0-linux-x86_64.tar.gz` |
+| Windows x64 | `lineageguard-v0.3.0-windows-x86_64.zip` |
+| macOS ARM64 | `lineageguard-v0.3.0-macos-aarch64.tar.gz` |
 
-Download the archive for your platform and `SHA256SUMS` from the [v0.2.1 release](https://github.com/KageRyo/LineageGuard/releases/tag/v0.2.1), then verify the downloaded archive before extracting it:
+Download the archive for your platform and `SHA256SUMS` from the [v0.3.0 release](https://github.com/KageRyo/LineageGuard/releases/tag/v0.3.0), then verify the downloaded archive before extracting it:
 
 ```sh
-grep '  lineageguard-v0.2.1-linux-x86_64.tar.gz$' SHA256SUMS | sha256sum --check
-tar -xzf lineageguard-v0.2.1-linux-x86_64.tar.gz
+grep '  lineageguard-v0.3.0-linux-x86_64.tar.gz$' SHA256SUMS | sha256sum --check
+tar -xzf lineageguard-v0.3.0-linux-x86_64.tar.gz
 ./lineageguard --help
 ```
 
 On macOS, verify the ARM64 archive with `shasum` before extracting it:
 
 ```sh
-grep '  lineageguard-v0.2.1-macos-aarch64.tar.gz$' SHA256SUMS | shasum -a 256 --check
-tar -xzf lineageguard-v0.2.1-macos-aarch64.tar.gz
+grep '  lineageguard-v0.3.0-macos-aarch64.tar.gz$' SHA256SUMS | shasum -a 256 --check
+tar -xzf lineageguard-v0.3.0-macos-aarch64.tar.gz
 ```
 
 For the Windows ZIP, compare its `Get-FileHash -Algorithm SHA256` result with the matching entry in `SHA256SUMS` before using `Expand-Archive`.
@@ -51,6 +51,7 @@ lineageguard validate examples/basic-lineage
 lineageguard verify examples/basic-lineage
 lineageguard lineage derived-summary-v1 examples/basic-lineage
 lineageguard graph examples/basic-lineage
+lineageguard diff examples/manifest-diff/v1.yaml examples/manifest-diff/v2.yaml
 lineageguard audit examples/basic-lineage
 ```
 
@@ -117,6 +118,7 @@ lineageguard verify [PATH]
 lineageguard lineage <ARTIFACT_ID> [PATH]
 lineageguard audit [PATH]
 lineageguard graph [PATH] [--format mermaid|dot]
+lineageguard diff OLD NEW [--format text|json]
 ```
 
 `validate` checks the manifest schema, IDs, references, digest syntax, path safety, duplicate edges, and dependency cycles. It does not require declared files to exist or hash them. `verify` streams local artifact and snapshot bytes through SHA-256 and checks an optional declared size; it never prints file contents or downloads remote locators. Unknown and unavailable sources without snapshots do not count as integrity failures.
@@ -147,6 +149,15 @@ flowchart LR
   source_0002 -->|derived_from| artifact_0000
 ```
 
+`diff` compares source and artifact entries by ID, including changed fields, and compares lineage edges by direction and relationship type. It also reports a changed manifest version. Additions and removals include their declared fields. Output order is independent of YAML map or edge order. The command does not validate lineage semantics, read payload files, or verify hashes; run `validate` or `verify` for those checks. A completed comparison exits `0` whether or not changes exist; malformed input exits `2`.
+
+```sh
+lineageguard diff examples/manifest-diff/v1.yaml examples/manifest-diff/v2.yaml
+lineageguard diff old.yaml new.yaml --format json
+```
+
+The example reports source, artifact, and edge counts, then shows the changed IDs and field values. JSON includes the same summary and field-level changes for CI consumers.
+
 Exit codes are `0` for a successful command, `1` for an integrity failure, dependency cycle, or audit finding, and `2` for invalid configuration, malformed input, unsafe paths, or execution errors. Explicit unknown and unavailable source states alone do not make `verify` fail; they do make `audit` report an incomplete chain.
 
 All data paths in the manifest must be relative, use `/`, and stay inside the project root after symlink resolution. Absolute paths, Windows drive paths, `.` or `..` components, backslashes, Windows-reserved characters or device names, and components ending in a dot or space are rejected. An in-root symlink is accepted but reported by `audit` as `mutable_path`; a symlink that resolves outside the root is rejected. A path component named `current` is accepted and reported as mutable by `audit`.
@@ -159,7 +170,7 @@ After checking out the dataset, use the composite Action to validate `lineage.ya
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: KageRyo/LineageGuard@v0.2.1
+- uses: KageRyo/LineageGuard@v0.3.0
   with:
     path: .
 ```

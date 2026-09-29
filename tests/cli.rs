@@ -29,6 +29,25 @@ fn invoke(args: &[&str], root: &std::path::Path) -> Output {
         .expect("run lineageguard")
 }
 
+fn invoke_diff(
+    old_manifest: &std::path::Path,
+    new_manifest: &std::path::Path,
+    format: Option<&str>,
+) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_lineageguard"));
+    command.arg("diff").arg(old_manifest).arg(new_manifest);
+    if let Some(format) = format {
+        command.args(["--format", format]);
+    }
+    command.output().expect("run lineageguard diff")
+}
+
+fn write_named_manifest(root: &std::path::Path, name: &str, contents: &str) -> std::path::PathBuf {
+    let path = root.join(name);
+    fs::write(&path, contents).expect("write named manifest");
+    path
+}
+
 fn write_manifest(root: &std::path::Path, manifest: &str) {
     fs::write(root.join("lineage.yaml"), manifest).expect("write manifest");
 }
@@ -190,6 +209,241 @@ fn graph_fails_without_partial_output_for_cycles_or_incompatible_format() {
     assert_eq!(incompatible.status.code(), Some(2));
     assert!(incompatible.stdout.is_empty());
     assert!(String::from_utf8_lossy(&incompatible.stderr).contains("mermaid or dot"));
+}
+
+#[test]
+fn diff_reports_entity_fields_and_edge_changes_as_json() {
+    let old_root = tempfile::tempdir().expect("old manifest directory");
+    let new_root = tempfile::tempdir().expect("new manifest directory");
+    let old_manifest = write_named_manifest(
+        old_root.path(),
+        "old.yaml",
+        "version: 1\nsources:\n  keep: {status: unknown}\n  removed-source: {status: unavailable}\n  snapshot-source:\n    status: available\n    snapshot: {path: sources/old.bin, sha256: 0000000000000000000000000000000000000000000000000000000000000000}\nartifacts:\n  keep-artifact:\n    path: data/old.csv\n    sha256: 0000000000000000000000000000000000000000000000000000000000000000\n  removed-artifact: {}\nlineage:\n  - {from: keep, to: keep-artifact, type: derived_from}\n  - {from: removed-source, to: keep-artifact, type: derived_from}\n",
+    );
+    let new_manifest = write_named_manifest(
+        new_root.path(),
+        "new.yaml",
+        "version: 1\nsources:\n  added-source: {status: available}\n  keep: {status: available, revision: rev-2}\n  snapshot-source:\n    status: available\n    snapshot: {path: sources/new.bin, sha256: 0000000000000000000000000000000000000000000000000000000000000000}\nartifacts:\n  added-artifact: {}\n  keep-artifact:\n    path: data/new.csv\n    sha256: 1111111111111111111111111111111111111111111111111111111111111111\nlineage:\n  - {from: keep, to: keep-artifact, type: derived_from}\n  - {from: added-source, to: added-artifact, type: derived_from}\n",
+    );
+
+    let output = invoke_diff(&old_manifest, &new_manifest, Some("json"));
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report = output_json(&output);
+    assert_eq!(report["command"], "diff");
+    assert_eq!(report["status"], "changed");
+    assert_eq!(report["summary"]["sources"]["added"], 1);
+    assert_eq!(report["summary"]["sources"]["removed"], 1);
+    assert_eq!(report["summary"]["sources"]["changed"], 2);
+    assert_eq!(report["summary"]["artifacts"]["added"], 1);
+    assert_eq!(report["summary"]["artifacts"]["removed"], 1);
+    assert_eq!(report["summary"]["artifacts"]["changed"], 1);
+    assert_eq!(report["summary"]["edges"]["added"], 1);
+    assert_eq!(report["summary"]["edges"]["removed"], 1);
+    assert_eq!(report["summary"]["has_changes"], true);
+
+    let changes = report["changes"].as_array().expect("changes array");
+    let added_source = changes
+        .iter()
+        .find(|change| change["kind"] == "source" && change["id"] == "added-source")
+        .expect("added source");
+    assert_eq!(added_source["fields"][0]["path"], "status");
+    assert_eq!(added_source["fields"][0]["new"], "available");
+    let removed_source = changes
+        .iter()
+        .find(|change| change["kind"] == "source" && change["id"] == "removed-source")
+        .expect("removed source");
+    assert_eq!(removed_source["fields"][0]["path"], "status");
+    assert_eq!(removed_source["fields"][0]["old"], "unavailable");
+
+    let source_update = changes
+        .iter()
+        .find(|change| change["kind"] == "source" && change["id"] == "keep")
+        .expect("updated source");
+    assert_eq!(source_update["change"], "changed");
+    let status_change = source_update["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["path"] == "status")
+        .expect("status field change");
+    assert_eq!(status_change["old"], "unknown");
+    assert_eq!(status_change["new"], "available");
+    let revision_change = source_update["fields"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|field| field["path"] == "revision")
+        .expect("added revision field");
+    assert!(revision_change.get("old").is_none());
+    assert_eq!(revision_change["new"], "rev-2");
+
+    let snapshot_update = changes
+        .iter()
+        .find(|change| change["kind"] == "source" && change["id"] == "snapshot-source")
+        .expect("updated source snapshot");
+    assert_eq!(snapshot_update["fields"][0]["path"], "snapshot.path");
+    assert_eq!(snapshot_update["fields"][0]["old"], "sources/old.bin");
+    assert_eq!(snapshot_update["fields"][0]["new"], "sources/new.bin");
+
+    let artifact_update = changes
+        .iter()
+        .find(|change| change["kind"] == "artifact" && change["id"] == "keep-artifact")
+        .expect("updated artifact");
+    assert_eq!(artifact_update["fields"][0]["path"], "path");
+    assert_eq!(artifact_update["fields"][0]["old"], "data/old.csv");
+    assert_eq!(artifact_update["fields"][0]["new"], "data/new.csv");
+
+    assert!(changes.iter().any(|change| {
+        change["kind"] == "edge"
+            && change["change"] == "added"
+            && change["from"] == "added-source"
+            && change["to"] == "added-artifact"
+    }));
+    assert!(changes.iter().any(|change| {
+        change["kind"] == "edge"
+            && change["change"] == "removed"
+            && change["from"] == "removed-source"
+            && change["to"] == "keep-artifact"
+    }));
+}
+
+#[test]
+fn diff_text_shows_summary_and_field_values() {
+    let old_root = tempfile::tempdir().expect("old manifest directory");
+    let new_root = tempfile::tempdir().expect("new manifest directory");
+    let old_manifest = write_named_manifest(
+        old_root.path(),
+        "old.yaml",
+        "version: 1\nsources:\n  source-a: {status: unknown}\nartifacts:\n  result:\n    path: data/old.csv\n    sha256: 0000000000000000000000000000000000000000000000000000000000000000\nlineage: []\n",
+    );
+    let new_manifest = write_named_manifest(
+        new_root.path(),
+        "new.yaml",
+        "version: 1\nsources:\n  source-a: {status: available}\nartifacts:\n  result:\n    path: data/new.csv\n    sha256: 1111111111111111111111111111111111111111111111111111111111111111\nlineage: []\n",
+    );
+
+    let output = invoke_diff(&old_manifest, &new_manifest, None);
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("Sources: +0 added, -0 removed, ~1 changed"));
+    assert!(text.contains("Artifacts: +0 added, -0 removed, ~1 changed"));
+    assert!(text.contains("Edges: +0 added, -0 removed"));
+    assert!(text.contains("status: \"unknown\" -> \"available\""));
+    assert!(text.contains("path: \"data/old.csv\" -> \"data/new.csv\""));
+}
+
+#[test]
+fn diff_is_deterministic_and_does_not_read_payloads() {
+    let first_old = tempfile::tempdir().expect("first old directory");
+    let first_new = tempfile::tempdir().expect("first new directory");
+    let second_old = tempfile::tempdir().expect("second old directory");
+    let second_new = tempfile::tempdir().expect("second new directory");
+    let old_a = "version: 1\nsources:\n  z-source: {status: unknown}\n  a-source: {status: available}\nartifacts:\n  z-result: {path: missing/old.csv, sha256: 0000000000000000000000000000000000000000000000000000000000000000}\n  a-result: {}\nlineage:\n  - {from: z-source, to: z-result, type: derived_from}\n  - {from: a-source, to: z-result, type: derived_from}\n";
+    let old_b = "version: 1\nsources:\n  a-source: {status: available}\n  z-source: {status: unknown}\nartifacts:\n  a-result: {}\n  z-result: {path: missing/old.csv, sha256: 0000000000000000000000000000000000000000000000000000000000000000}\nlineage:\n  - {from: a-source, to: z-result, type: derived_from}\n  - {from: z-source, to: z-result, type: derived_from}\n";
+    let new_a = "version: 1\nsources:\n  z-source: {status: available}\n  a-source: {status: available}\nartifacts:\n  z-result: {path: missing/new.csv, sha256: 1111111111111111111111111111111111111111111111111111111111111111}\n  a-result: {}\nlineage:\n  - {from: a-source, to: z-result, type: derived_from}\n  - {from: z-source, to: z-result, type: derived_from}\n";
+    let new_b = "version: 1\nsources:\n  a-source: {status: available}\n  z-source: {status: available}\nartifacts:\n  a-result: {}\n  z-result: {path: missing/new.csv, sha256: 1111111111111111111111111111111111111111111111111111111111111111}\nlineage:\n  - {from: z-source, to: z-result, type: derived_from}\n  - {from: a-source, to: z-result, type: derived_from}\n";
+    let first_old_manifest = write_named_manifest(first_old.path(), "old.yaml", old_a);
+    let first_new_manifest = write_named_manifest(first_new.path(), "new.yaml", new_a);
+    let second_old_manifest = write_named_manifest(second_old.path(), "old.yaml", old_b);
+    let second_new_manifest = write_named_manifest(second_new.path(), "new.yaml", new_b);
+
+    let first = invoke_diff(&first_old_manifest, &first_new_manifest, Some("json"));
+    let second = invoke_diff(&second_old_manifest, &second_new_manifest, Some("json"));
+
+    assert_eq!(first.status.code(), Some(0));
+    assert_eq!(second.status.code(), Some(0));
+    assert_eq!(first.stdout, second.stdout);
+}
+
+#[test]
+fn diff_reports_unchanged_manifests_and_rejects_invalid_formats_or_yaml() {
+    let root = tempfile::tempdir().expect("manifest directory");
+    let contents = "version: 1\nartifacts:\n  result: {}\n";
+    let old_manifest = write_named_manifest(root.path(), "old.yaml", contents);
+    let new_manifest = write_named_manifest(root.path(), "new.yaml", contents);
+
+    let unchanged = invoke_diff(&old_manifest, &new_manifest, Some("json"));
+    assert_eq!(unchanged.status.code(), Some(0));
+    let report = output_json(&unchanged);
+    assert_eq!(report["status"], "unchanged");
+    assert_eq!(report["summary"]["has_changes"], false);
+    assert_eq!(report["changes"].as_array().unwrap().len(), 0);
+
+    let invalid_format = invoke_diff(&old_manifest, &new_manifest, Some("mermaid"));
+    assert_eq!(invalid_format.status.code(), Some(2));
+    assert!(invalid_format.stdout.is_empty());
+
+    let invalid_manifest = write_named_manifest(root.path(), "invalid.yaml", "version: [");
+    let invalid_yaml = invoke_diff(&invalid_manifest, &new_manifest, None);
+    assert_eq!(invalid_yaml.status.code(), Some(2));
+    assert!(invalid_yaml.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&invalid_yaml.stderr).contains("invalid_manifest"));
+}
+
+#[test]
+fn diff_reports_manifest_version_changes_and_duplicate_edge_removals() {
+    let old_root = tempfile::tempdir().expect("old manifest directory");
+    let new_root = tempfile::tempdir().expect("new manifest directory");
+    let old_manifest = write_named_manifest(
+        old_root.path(),
+        "old.yaml",
+        "version: 1\nsources:\n  source-a: {status: available}\nartifacts:\n  result: {}\nlineage:\n  - {from: source-a, to: result, type: derived_from}\n  - {from: source-a, to: result, type: derived_from}\n",
+    );
+    let new_manifest = write_named_manifest(
+        new_root.path(),
+        "new.yaml",
+        "version: 2\nsources:\n  source-a: {status: available}\nartifacts:\n  result: {}\nlineage:\n  - {from: source-a, to: result, type: derived_from}\n",
+    );
+
+    let output = invoke_diff(&old_manifest, &new_manifest, Some("json"));
+
+    assert_eq!(output.status.code(), Some(0));
+    let report = output_json(&output);
+    assert_eq!(report["summary"]["manifest_version_changed"], true);
+    assert_eq!(report["summary"]["edges"]["removed"], 1);
+    let version_change = report["changes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|change| change["kind"] == "manifest")
+        .expect("manifest version change");
+    assert_eq!(version_change["fields"][0]["old"], 1);
+    assert_eq!(version_change["fields"][0]["new"], 2);
+}
+
+#[test]
+fn diff_text_escapes_control_characters_in_manifest_ids() {
+    let old_root = tempfile::tempdir().expect("old manifest directory");
+    let new_root = tempfile::tempdir().expect("new manifest directory");
+    let old_manifest = write_named_manifest(
+        old_root.path(),
+        "old.yaml",
+        "version: 1\nartifacts:\n  result: {}\n",
+    );
+    let new_manifest = write_named_manifest(
+        new_root.path(),
+        "new.yaml",
+        "version: 1\nsources:\n  \"unsafe\\u001b[31m\": {status: available}\nartifacts:\n  result: {}\n",
+    );
+
+    let output = invoke_diff(&old_manifest, &new_manifest, None);
+
+    assert_eq!(output.status.code(), Some(0));
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(!text.contains('\u{1b}'));
+    assert!(text.contains("source \"unsafe\\u001b[31m\""));
 }
 
 #[test]
@@ -562,6 +816,29 @@ fn synthetic_basic_example_validates_and_verifies() {
     let verification = invoke(&["verify"], &path);
     assert_eq!(verification.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&verification.stdout).contains("PASS local integrity checks"));
+}
+
+#[test]
+fn manifest_diff_example_shows_release_metadata_changes() {
+    let output = invoke_diff(
+        &example_path("manifest-diff/v1.yaml"),
+        &example_path("manifest-diff/v2.yaml"),
+        None,
+    );
+
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8(output.stdout).unwrap();
+    assert!(text.contains("Sources: +1 added, -1 removed, ~1 changed"));
+    assert!(text.contains("Artifacts: +0 added, -0 removed, ~2 changed"));
+    assert!(text.contains("Edges: +1 added, -1 removed"));
+    assert!(text.contains("revision: \"archive-2025-01\" -> \"archive-2026-01\""));
+    assert!(text.contains("+ source \"station-catalog\""));
+    assert!(text.contains("- source \"retired-station-feed\""));
 }
 
 #[test]
