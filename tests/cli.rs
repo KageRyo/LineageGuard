@@ -112,6 +112,87 @@ fn verify_reports_a_hash_mismatch_without_printing_file_contents() {
 }
 
 #[test]
+fn graph_defaults_to_mermaid_and_includes_isolated_nodes_and_availability() {
+    let directory = project();
+    write_manifest(
+        directory.path(),
+        "version: 1\nsources:\n  official: {status: available}\n  isolated-source: {status: unknown}\nartifacts:\n  derived: {}\n  isolated-artifact: {}\nlineage:\n  - {from: official, to: derived, type: derived_from}\n",
+    );
+
+    let output = invoke(&["graph"], directory.path());
+
+    assert_eq!(output.status.code(), Some(0));
+    let graph = String::from_utf8(output.stdout).unwrap();
+    assert!(graph.starts_with("flowchart LR\n"));
+    assert!(graph.contains("source: official #40;availability=available#41;"));
+    assert!(graph.contains("source: isolated-source #40;availability=unknown#41;"));
+    assert!(graph.contains("artifact: isolated-artifact"));
+    assert!(graph.contains("derived_from"));
+    assert!(!graph.contains("VERIFIED"));
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn graph_mermaid_escapes_html_like_label_markup() {
+    let directory = project();
+    write_manifest(
+        directory.path(),
+        "version: 1\nsources:\n  '<br>': {status: available}\nartifacts:\n  '<b>': {}\nlineage:\n  - {from: '<br>', to: '<b>', type: derived_from}\n",
+    );
+
+    let output = invoke(&["graph"], directory.path());
+
+    assert_eq!(output.status.code(), Some(0));
+    let graph = String::from_utf8(output.stdout).unwrap();
+    assert!(graph.contains("#60;br#62;"));
+    assert!(graph.contains("#60;b#62;"));
+    assert!(!graph.contains("<br>"));
+    assert!(!graph.contains("<b>"));
+}
+
+#[test]
+fn graph_dot_escapes_labels_and_is_deterministic() {
+    let first_directory = project();
+    let second_directory = project();
+    let first_manifest = "version: 1\nsources:\n  'source \\\"quoted\\\" \\\\ [x]': {status: available}\n  isolated: {status: not_applicable}\nartifacts:\n  'artifact \\\"result\\\"': {path: data/not-materialized.csv, sha256: 8336d8801f75d65bbb33de833eeca48f8079e90ed50accde75b6641ad81e3486}\nlineage:\n  - {from: 'source \\\"quoted\\\" \\\\ [x]', to: 'artifact \\\"result\\\"', type: derived_from}\n";
+    let second_manifest = "version: 1\nsources:\n  isolated: {status: not_applicable}\n  'source \\\"quoted\\\" \\\\ [x]': {status: available}\nartifacts:\n  'artifact \\\"result\\\"': {path: data/not-materialized.csv, sha256: 8336d8801f75d65bbb33de833eeca48f8079e90ed50accde75b6641ad81e3486}\nlineage:\n  - {from: 'source \\\"quoted\\\" \\\\ [x]', to: 'artifact \\\"result\\\"', type: derived_from}\n";
+    write_manifest(first_directory.path(), first_manifest);
+    write_manifest(second_directory.path(), second_manifest);
+
+    let first = invoke(&["graph", "--format", "dot"], first_directory.path());
+    let second = invoke(&["graph", "--format", "dot"], second_directory.path());
+
+    assert_eq!(first.status.code(), Some(0));
+    assert_eq!(first.stdout, second.stdout);
+    let graph = String::from_utf8(first.stdout).unwrap();
+    assert!(graph.starts_with("digraph lineage {\n"));
+    assert!(graph.contains(r#"\\\"quoted\\\""#));
+    assert!(graph.contains("\\\\"));
+    assert!(graph.contains("availability=not_applicable"));
+    assert!(!graph.contains("not-materialized.csv"));
+    assert!(!graph.contains("VERIFIED"));
+}
+
+#[test]
+fn graph_fails_without_partial_output_for_cycles_or_incompatible_format() {
+    let directory = project();
+    write_manifest(
+        directory.path(),
+        "version: 1\nartifacts:\n  a: {}\n  b: {}\nlineage:\n  - {from: a, to: b, type: derived_from}\n  - {from: b, to: a, type: derived_from}\n",
+    );
+
+    let cycle = invoke(&["graph"], directory.path());
+    assert_eq!(cycle.status.code(), Some(1));
+    assert!(cycle.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&cycle.stderr).contains("lineage_cycle"));
+
+    let incompatible = invoke(&["graph", "--format", "json"], directory.path());
+    assert_eq!(incompatible.status.code(), Some(2));
+    assert!(incompatible.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&incompatible.stderr).contains("mermaid or dot"));
+}
+
+#[test]
 fn verify_reports_a_missing_declared_artifact() {
     let directory = project();
     fs::remove_file(directory.path().join("data/events.csv")).expect("remove artifact");
