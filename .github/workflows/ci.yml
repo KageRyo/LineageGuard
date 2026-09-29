@@ -25,3 +25,10 @@ jobs:
       - run: cargo clippy --locked --all-targets --all-features -- -D warnings
       - run: cargo test --locked
       - run: cargo build --release --locked
+
+  action-wrapper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Test checksum-verified Action wrapper
+        run: bash scripts/test-lineageguard-action.sh

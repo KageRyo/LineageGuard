@@ -1,0 +1,20 @@
+name: LineageGuard Provenance Validator
+description: Validate provenance, local integrity, and declared lineage with LineageGuard.
+author: KageRyo
+branding:
+  icon: git-branch
+  color: blue
+inputs:
+  path:
+    description: Project directory or lineage.yaml path, relative to the checked-out workspace.
+    required: false
+    default: .
+runs:
+  using: composite
+  steps:
+    - name: Validate and verify LineageGuard manifest
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        DATASET_PATH: ${{ inputs.path }}
+      run: bash "$ACTION_PATH/scripts/lineageguard-action.sh" "$DATASET_PATH"

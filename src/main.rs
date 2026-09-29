@@ -1,9 +1,13 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use lineageguard::manifest::load_project;
 use lineageguard::model::{
-    AuditReport, Finding, LineageNode, LineageReport, ValidationReport, VerificationReport,
+    AuditReport, Finding, LineageNode, LineageReport, Manifest, ValidationReport,
+    VerificationReport,
 };
+use lineageguard::validation::validate_project;
 use lineageguard::{
     audit_path, error_exit_code, error_report, lineage_path, validate_path, verify_path,
 };
@@ -16,8 +20,8 @@ use serde::Serialize;
     about = "Validate local artifact provenance, identity, and lineage"
 )]
 struct Cli {
-    #[arg(long, value_enum, global = true, default_value_t = OutputFormat::Text)]
-    format: OutputFormat,
+    #[arg(long, value_enum, global = true)]
+    format: Option<OutputFormat>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -26,6 +30,14 @@ struct Cli {
 enum OutputFormat {
     Text,
     Json,
+    Mermaid,
+    Dot,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum GraphFormat {
+    Mermaid,
+    Dot,
 }
 
 #[derive(Debug, Subcommand)]
@@ -51,11 +63,35 @@ enum Commands {
         #[arg(default_value = ".")]
         path: PathBuf,
     },
+    /// Render all declared source, artifact, and lineage nodes as a graph.
+    Graph {
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
 }
 
 fn main() {
     let cli = Cli::parse();
-    let format = cli.format;
+    if let Commands::Graph { path } = &cli.command {
+        let format = match cli.format {
+            None | Some(OutputFormat::Mermaid) => GraphFormat::Mermaid,
+            Some(OutputFormat::Dot) => GraphFormat::Dot,
+            Some(OutputFormat::Text | OutputFormat::Json) => {
+                eprintln!("error [invalid_format]: graph accepts --format mermaid or dot");
+                std::process::exit(2);
+            }
+        };
+        std::process::exit(run_graph(path, format));
+    }
+
+    let format = match cli.format {
+        None | Some(OutputFormat::Text) => OutputFormat::Text,
+        Some(OutputFormat::Json) => OutputFormat::Json,
+        Some(OutputFormat::Mermaid | OutputFormat::Dot) => {
+            eprintln!("error [invalid_format]: report commands accept --format text or json");
+            std::process::exit(2);
+        }
+    };
     let (command_name, result) = match cli.command {
         Commands::Validate { path } => (
             "validate",
@@ -105,6 +141,7 @@ fn main() {
                 }
             }),
         ),
+        Commands::Graph { .. } => unreachable!("graph commands are handled above"),
     };
 
     match result {
@@ -135,7 +172,143 @@ where
             }
         },
         OutputFormat::Text => println!("{}", render_text()),
+        OutputFormat::Mermaid | OutputFormat::Dot => {
+            unreachable!("graph formats are handled separately")
+        }
     }
+}
+
+fn run_graph(path: &std::path::Path, format: GraphFormat) -> i32 {
+    let project = match load_project(path) {
+        Ok(project) => project,
+        Err(error) => {
+            eprintln!("error [{}]: {error}", error.code());
+            return error_exit_code(&error);
+        }
+    };
+    let findings = match validate_project(&project) {
+        Ok(findings) => findings,
+        Err(error) => {
+            eprintln!("error [{}]: {error}", error.code());
+            return error_exit_code(&error);
+        }
+    };
+    if !findings.is_empty() {
+        for finding in &findings {
+            eprintln!("{}", render_finding(finding));
+        }
+        return 1;
+    }
+    print!("{}", render_graph(&project.manifest, format));
+    0
+}
+
+fn render_graph(manifest: &Manifest, format: GraphFormat) -> String {
+    let mut node_ids = BTreeMap::new();
+    for (index, id) in manifest.sources.0.keys().enumerate() {
+        node_ids.insert(id.as_str(), format!("source_{index:04}"));
+    }
+    for (index, id) in manifest.artifacts.0.keys().enumerate() {
+        node_ids.insert(id.as_str(), format!("artifact_{index:04}"));
+    }
+
+    let mut lines = match format {
+        GraphFormat::Mermaid => vec!["flowchart LR".to_owned()],
+        GraphFormat::Dot => vec!["digraph lineage {".to_owned(), "  rankdir=LR;".to_owned()],
+    };
+
+    for (id, source) in &manifest.sources.0 {
+        let node_id = &node_ids[id.as_str()];
+        let label = format!("source: {id} (availability={})", source.status.as_str());
+        match format {
+            GraphFormat::Mermaid => lines.push(format!(
+                "  {node_id}([\"{}\"])",
+                escape_mermaid_label(&label)
+            )),
+            GraphFormat::Dot => lines.push(format!(
+                "  {node_id} [label=\"{}\", shape=ellipse];",
+                escape_dot_label(&label)
+            )),
+        }
+    }
+    for id in manifest.artifacts.0.keys() {
+        let node_id = &node_ids[id.as_str()];
+        let label = format!("artifact: {id}");
+        match format {
+            GraphFormat::Mermaid => {
+                lines.push(format!("  {node_id}[\"{}\"]", escape_mermaid_label(&label)))
+            }
+            GraphFormat::Dot => lines.push(format!(
+                "  {node_id} [label=\"{}\", shape=box];",
+                escape_dot_label(&label)
+            )),
+        }
+    }
+
+    let mut edges: Vec<_> = manifest.lineage.iter().collect();
+    edges.sort_by(|left, right| {
+        (&left.from, &left.to, left.relation.as_str()).cmp(&(
+            &right.from,
+            &right.to,
+            right.relation.as_str(),
+        ))
+    });
+    for edge in edges {
+        let from = &node_ids[edge.from.as_str()];
+        let to = &node_ids[edge.to.as_str()];
+        match format {
+            GraphFormat::Mermaid => lines.push(format!(
+                "  {from} -->|{}| {to}",
+                escape_mermaid_label(edge.relation.as_str())
+            )),
+            GraphFormat::Dot => lines.push(format!(
+                "  {from} -> {to} [label=\"{}\"];",
+                escape_dot_label(edge.relation.as_str())
+            )),
+        }
+    }
+
+    if matches!(format, GraphFormat::Dot) {
+        lines.push("}".to_owned());
+    }
+    format!("{}\n", lines.join("\n"))
+}
+
+fn escape_mermaid_label(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            '&' => "#38;".to_owned(),
+            '"' => "#quot;".to_owned(),
+            '\\' => "#92;".to_owned(),
+            '#' => "#35;".to_owned(),
+            ';' => "#59;".to_owned(),
+            '|' => "#124;".to_owned(),
+            '[' => "#91;".to_owned(),
+            ']' => "#93;".to_owned(),
+            '{' => "#123;".to_owned(),
+            '}' => "#125;".to_owned(),
+            '(' => "#40;".to_owned(),
+            ')' => "#41;".to_owned(),
+            '<' => "#60;".to_owned(),
+            '>' => "#62;".to_owned(),
+            '\'' => "#39;".to_owned(),
+            other => other.to_string(),
+        })
+        .collect()
+}
+
+fn escape_dot_label(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            '\\' => "\\\\".to_owned(),
+            '"' => "\\\"".to_owned(),
+            '\n' => "\\n".to_owned(),
+            '\r' => "\\r".to_owned(),
+            other => other.to_string(),
+        })
+        .collect()
 }
 
 fn render_validation(report: &ValidationReport) -> String {
