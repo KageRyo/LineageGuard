@@ -13,16 +13,71 @@ fn action_version_matches_package_and_runs_the_expected_checks() {
     let action_version = read_repo_file("action-version.txt");
     let action = read_repo_file("action.yml");
     let wrapper = read_repo_file("scripts/lineageguard-action.sh");
+    let readme = read_repo_file("README.md");
 
     assert!(manifest
         .lines()
-        .any(|line| line.trim() == "version = \"0.2.0\""));
-    assert_eq!(action_version.trim(), "v0.2.0");
+        .any(|line| line.trim() == "version = \"0.2.1\""));
+    assert_eq!(action_version.trim(), "v0.2.1");
     assert!(action.contains("using: composite"));
     assert!(action.contains("default: ."));
     assert!(action.contains("scripts/lineageguard-action.sh"));
     assert!(wrapper.contains("sha256sum --check --strict"));
     assert!(wrapper.contains("for command in validate verify"));
+    for required in [
+        "lineageguard-v0.2.1-linux-x86_64.tar.gz",
+        "lineageguard-v0.2.1-windows-x86_64.zip",
+        "lineageguard-v0.2.1-macos-aarch64.tar.gz",
+        "uses: KageRyo/LineageGuard@v0.2.1",
+    ] {
+        assert!(readme.contains(required), "README lacks {required:?}");
+    }
+}
+
+#[test]
+fn linux_release_builder_preserves_the_glibc_234_baseline_on_ubuntu_24() {
+    let readme = read_repo_file("README.md");
+    let release: serde_json::Value =
+        yaml_serde::from_str(&read_repo_file(".github/workflows/release.yml"))
+            .expect("release workflow must parse as YAML");
+    let linux_build = release["jobs"]["build"]["strategy"]["matrix"]["include"]
+        .as_array()
+        .expect("release matrix must be an array")
+        .iter()
+        .find(|entry| entry["target"] == "x86_64-unknown-linux-gnu")
+        .expect("release matrix must include Linux x64");
+    assert_eq!(linux_build["os"], "ubuntu-24.04");
+
+    let release_steps = release["jobs"]["build"]["steps"]
+        .as_array()
+        .expect("release build steps must be an array");
+    assert!(release_steps.iter().any(|step| {
+        step["name"] == "Check Linux GLIBC compatibility"
+            && step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("scripts/check-linux-glibc-compatibility.sh"))
+    }));
+
+    let ci: serde_json::Value = yaml_serde::from_str(&read_repo_file(".github/workflows/ci.yml"))
+        .expect("CI workflow must parse as YAML");
+    let ci_steps = ci["jobs"]["rust"]["steps"]
+        .as_array()
+        .expect("Rust CI steps must be an array");
+    assert!(ci_steps.iter().any(|step| {
+        step["name"] == "Check Linux GLIBC compatibility"
+            && step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("scripts/check-linux-glibc-compatibility.sh"))
+    }));
+
+    let compatibility_check = read_repo_file("scripts/check-linux-glibc-compatibility.sh");
+    assert!(compatibility_check.contains("GLIBC_2.34"));
+    assert!(compatibility_check.contains("ubuntu:22.04"));
+    assert!(readme.contains("glibc 2.34 or newer"));
+
+    let release_notes = read_repo_file("docs/releases/v0.2.1.md");
+    assert!(release_notes.contains("Ubuntu 24.04"));
+    assert!(release_notes.contains("glibc 2.34 or newer"));
 }
 
 #[test]

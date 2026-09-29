@@ -8,7 +8,8 @@ mkdir -p -- "$tmp_parent"
 test_root="$(mktemp -d "${tmp_parent%/}/lineageguard-action-tests.XXXXXX")"
 trap 'rm -rf -- "$test_root"' EXIT
 
-archive_name="lineageguard-v0.2.0-linux-x86_64.tar.gz"
+release_version="$(<"$repo_root/action-version.txt")"
+archive_name="lineageguard-${release_version}-linux-x86_64.tar.gz"
 
 fail() {
   echo "FAIL: $*" >&2

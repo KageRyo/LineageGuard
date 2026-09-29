@@ -36,8 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Retain the lower glibc baseline for the Linux binary; migrate before this runner is retired.
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             asset: linux-x86_64
           - os: windows-latest
@@ -71,6 +70,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo build --release --locked --target "$env:TARGET"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check Linux GLIBC compatibility
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        env:
+          TARGET: ${{ matrix.target }}
+        run: bash scripts/check-linux-glibc-compatibility.sh "target/$TARGET/release/lineageguard"
       - name: Package Unix binary
         if: runner.os != 'Windows'
         env:
