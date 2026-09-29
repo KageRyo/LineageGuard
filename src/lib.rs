@@ -1,4 +1,5 @@
 pub mod audit;
+pub mod diff;
 pub mod error;
 pub mod lineage;
 pub mod manifest;
