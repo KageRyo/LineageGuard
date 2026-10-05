@@ -188,3 +188,7 @@ Version 1 records artifact-level lineage only. It does not map individual record
 ## License
 
 LineageGuard is licensed under [Apache-2.0](LICENSE). Third-party dependency license notices are listed in [THIRD-PARTY-LICENSES.txt](THIRD-PARTY-LICENSES.txt).
+
+## Maintenance
+
+See [maintenance conventions](docs/maintenance.md) for dependency updates, required CI, Action pinning and release validation.
