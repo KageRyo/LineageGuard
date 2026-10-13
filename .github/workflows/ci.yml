@@ -45,28 +45,28 @@ jobs:
           printf '%s\n' macos-aarch64 > "$fixture_root/macos-aarch64.txt"
           printf '%s\n' windows-x86_64 > "$fixture_root/windows-x86_64.txt"
       - name: Upload Linux artifact fixture
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lineageguard-smoke-linux-x86_64
           path: ${{ runner.temp }}/lineageguard-artifact-fixtures/linux-x86_64.txt
           if-no-files-found: error
           retention-days: 1
       - name: Upload macOS artifact fixture
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lineageguard-smoke-macos-aarch64
           path: ${{ runner.temp }}/lineageguard-artifact-fixtures/macos-aarch64.txt
           if-no-files-found: error
           retention-days: 1
       - name: Upload Windows artifact fixture
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: lineageguard-smoke-windows-x86_64
           path: ${{ runner.temp }}/lineageguard-artifact-fixtures/windows-x86_64.txt
           if-no-files-found: error
           retention-days: 1
       - name: Download and merge platform artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: lineageguard-smoke-*
           merge-multiple: true
