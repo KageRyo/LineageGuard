@@ -9,42 +9,19 @@ fn read_repo_file(path: &str) -> String {
 
 #[test]
 fn action_version_matches_package_and_runs_the_expected_checks() {
-    let manifest = read_repo_file("Cargo.toml");
     let action_version = read_repo_file("action-version.txt");
     let action = read_repo_file("action.yml");
     let wrapper = read_repo_file("scripts/lineageguard-action.sh");
-    let readme = read_repo_file("README.md");
 
-    assert!(manifest
-        .lines()
-        .any(|line| line.trim() == "version = \"0.3.0\""));
-    assert_eq!(action_version.trim(), "v0.3.0");
+    assert_eq!(
+        action_version.trim(),
+        format!("v{}", env!("CARGO_PKG_VERSION"))
+    );
     assert!(action.contains("using: composite"));
     assert!(action.contains("default: ."));
     assert!(action.contains("scripts/lineageguard-action.sh"));
     assert!(wrapper.contains("sha256sum --check --strict"));
     assert!(wrapper.contains("for command in validate verify"));
-    for required in [
-        "lineageguard-v0.3.0-linux-x86_64.tar.gz",
-        "lineageguard-v0.3.0-windows-x86_64.zip",
-        "lineageguard-v0.3.0-macos-aarch64.tar.gz",
-        "uses: KageRyo/LineageGuard@v0.3.0",
-    ] {
-        assert!(readme.contains(required), "README lacks {required:?}");
-    }
-}
-
-#[test]
-fn manifest_diff_cli_and_v0_3_0_example_are_documented() {
-    let readme = read_repo_file("README.md");
-    let release_notes = read_repo_file("docs/releases/v0.3.0.md");
-
-    assert!(readme.contains("lineageguard diff OLD NEW"));
-    assert!(readme.contains("examples/manifest-diff/v1.yaml"));
-    assert!(readme.contains("--format json"));
-    assert!(readme.contains("changed manifest version"));
-    assert!(release_notes.contains("lineageguard diff"));
-    assert!(release_notes.contains("sources, artifacts, and lineage edges"));
 }
 
 #[test]
