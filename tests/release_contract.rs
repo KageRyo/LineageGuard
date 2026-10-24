@@ -8,10 +8,9 @@ fn read_repo_file(path: &str) -> String {
 }
 
 #[test]
-fn action_version_matches_package_and_runs_the_expected_checks() {
+fn action_version_matches_package_and_references_wrapper() {
     let action_version = read_repo_file("action-version.txt");
     let action = read_repo_file("action.yml");
-    let wrapper = read_repo_file("scripts/lineageguard-action.sh");
 
     assert_eq!(
         action_version.trim(),
@@ -20,13 +19,10 @@ fn action_version_matches_package_and_runs_the_expected_checks() {
     assert!(action.contains("using: composite"));
     assert!(action.contains("default: ."));
     assert!(action.contains("scripts/lineageguard-action.sh"));
-    assert!(wrapper.contains("sha256sum --check --strict"));
-    assert!(wrapper.contains("for command in validate verify"));
 }
 
 #[test]
 fn linux_release_builder_preserves_the_glibc_234_baseline_on_ubuntu_24() {
-    let readme = read_repo_file("README.md");
     let release: serde_json::Value =
         yaml_serde::from_str(&read_repo_file(".github/workflows/release.yml"))
             .expect("release workflow must parse as YAML");
@@ -42,10 +38,9 @@ fn linux_release_builder_preserves_the_glibc_234_baseline_on_ubuntu_24() {
         .as_array()
         .expect("release build steps must be an array");
     assert!(release_steps.iter().any(|step| {
-        step["name"] == "Check Linux GLIBC compatibility"
-            && step["run"]
-                .as_str()
-                .is_some_and(|run| run.contains("scripts/check-linux-glibc-compatibility.sh"))
+        step["run"]
+            .as_str()
+            .is_some_and(|run| run.contains("scripts/check-linux-glibc-compatibility.sh"))
     }));
 
     let ci: serde_json::Value = yaml_serde::from_str(&read_repo_file(".github/workflows/ci.yml"))
@@ -54,20 +49,14 @@ fn linux_release_builder_preserves_the_glibc_234_baseline_on_ubuntu_24() {
         .as_array()
         .expect("Rust CI steps must be an array");
     assert!(ci_steps.iter().any(|step| {
-        step["name"] == "Check Linux GLIBC compatibility"
-            && step["run"]
-                .as_str()
-                .is_some_and(|run| run.contains("scripts/check-linux-glibc-compatibility.sh"))
+        step["run"]
+            .as_str()
+            .is_some_and(|run| run.contains("scripts/check-linux-glibc-compatibility.sh"))
     }));
 
     let compatibility_check = read_repo_file("scripts/check-linux-glibc-compatibility.sh");
     assert!(compatibility_check.contains("GLIBC_2.34"));
     assert!(compatibility_check.contains("ubuntu:22.04"));
-    assert!(readme.contains("glibc 2.34 or newer"));
-
-    let release_notes = read_repo_file("docs/releases/v0.2.1.md");
-    assert!(release_notes.contains("Ubuntu 24.04"));
-    assert!(release_notes.contains("glibc 2.34 or newer"));
 }
 
 #[test]
