@@ -12,23 +12,23 @@ Each GitHub release provides standalone archives for Linux x64, Windows x64, and
 
 | Platform | Archive |
 | --- | --- |
-| Linux x64 | `lineageguard-v0.3.0-linux-x86_64.tar.gz` |
-| Windows x64 | `lineageguard-v0.3.0-windows-x86_64.zip` |
-| macOS ARM64 | `lineageguard-v0.3.0-macos-aarch64.tar.gz` |
+| Linux x64 | `lineageguard-v0.3.1-linux-x86_64.tar.gz` |
+| Windows x64 | `lineageguard-v0.3.1-windows-x86_64.zip` |
+| macOS ARM64 | `lineageguard-v0.3.1-macos-aarch64.tar.gz` |
 
-Download the archive for your platform and `SHA256SUMS` from the [v0.3.0 release](https://github.com/KageRyo/LineageGuard/releases/tag/v0.3.0), then verify the downloaded archive before extracting it:
+Download the archive for your platform and `SHA256SUMS` from the [v0.3.1 release](https://github.com/KageRyo/LineageGuard/releases/tag/v0.3.1), then verify the downloaded archive before extracting it:
 
 ```sh
-grep '  lineageguard-v0.3.0-linux-x86_64.tar.gz$' SHA256SUMS | sha256sum --check
-tar -xzf lineageguard-v0.3.0-linux-x86_64.tar.gz
+grep '  lineageguard-v0.3.1-linux-x86_64.tar.gz$' SHA256SUMS | sha256sum --check
+tar -xzf lineageguard-v0.3.1-linux-x86_64.tar.gz
 ./lineageguard --help
 ```
 
 On macOS, verify the ARM64 archive with `shasum` before extracting it:
 
 ```sh
-grep '  lineageguard-v0.3.0-macos-aarch64.tar.gz$' SHA256SUMS | shasum -a 256 --check
-tar -xzf lineageguard-v0.3.0-macos-aarch64.tar.gz
+grep '  lineageguard-v0.3.1-macos-aarch64.tar.gz$' SHA256SUMS | shasum -a 256 --check
+tar -xzf lineageguard-v0.3.1-macos-aarch64.tar.gz
 ```
 
 For the Windows ZIP, compare its `Get-FileHash -Algorithm SHA256` result with the matching entry in `SHA256SUMS` before using `Expand-Archive`.
@@ -170,7 +170,7 @@ After checking out the dataset, use the composite Action to validate `lineage.ya
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: KageRyo/LineageGuard@v0.3.0
+- uses: KageRyo/LineageGuard@v0.3.1
   with:
     path: .
 ```
