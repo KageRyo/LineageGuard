@@ -29,12 +29,9 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         run: bash scripts/check-linux-glibc-compatibility.sh target/release/lineageguard
 
-  action-wrapper:
+  artifact-fixtures:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Test checksum-verified Action wrapper
-        run: bash scripts/test-lineageguard-action.sh
       - name: Prepare artifact action compatibility fixtures
         shell: bash
         run: |
@@ -65,6 +62,17 @@ jobs:
           path: ${{ runner.temp }}/lineageguard-artifact-fixtures/windows-x86_64.txt
           if-no-files-found: error
           retention-days: 1
+
+  action-wrapper:
+    # Download in a later job, as the release does: a job's own uploads may not be listed yet.
+    # Run even if the fixtures failed so this required check fails instead of being skipped.
+    needs: artifact-fixtures
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Test checksum-verified Action wrapper
+        run: bash scripts/test-lineageguard-action.sh
       - name: Download and merge platform artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
