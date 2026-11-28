@@ -4,7 +4,7 @@
 
 LineageGuard is a local command line tool for checking artifact identity, source provenance, and declared upstream lineage. It answers which inputs an artifact names, whether local copies still match their declared SHA-256 digests, and which provenance gaps remain explicit.
 
-LineageGuard reads a `lineage.yaml` manifest and local files only. It does not fetch URLs, validate dataset schemas or rows, transform data, manage workflows, or host a catalog. ReleaseGuard checks dataset structure such as field types, uniqueness, references, timestamp order, and release-file integrity; LineageGuard follows source and artifact identities across declared derivation edges.
+LineageGuard reads a `lineage.yaml` manifest and local files only, and follows source and artifact identities across declared derivation edges. To check dataset structure such as field types, uniqueness, references, timestamp order, and release-file integrity, use [ReleaseGuard](https://github.com/KageRyo/ReleaseGuard).
 
 ## Install a release binary
 
